@@ -1,8 +1,14 @@
 # CbexiEV
 
-A C++ implementation of the vehicle side of ISO 15118-20 and ISO 15118-2 using the C++ library evlibiso15118.
+This module implements an DIN70121 (tbd), ISO15118-2 (tbd) and ISO15118-20 EV using the the C++ library evlibiso15118.
 
-Roger Bedell
+provides:  
+  ev:
+    interface: ISO15118_ev
+    description: This module implements the ISO15118-2 implementation of an EV
+
+
+Author: Roger Bedell
 
 
 All documentation and the issue tracking can be found in our main repository here: https://github.com/EVerest/everest

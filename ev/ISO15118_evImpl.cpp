@@ -44,40 +44,79 @@ static eviso15118::config::TlsNegotiationStrategy convert_tls_negotiation_strate
 }
 
 void ISO15118_evImpl::init() {
-    // RDB - No logging path in the ev interface...
+    // RDB TODO - No logging path in the ev interface...
     // setup logging routine
     eviso15118::io::set_logging_callback([](const std::string& msg) { EVLOG_info << msg; });
 
     // RDB use a temp folder instead
     std::filesystem::path p = std::filesystem::temp_directory_path();
-    session_logger = std::make_unique<SessionLogger>(p.string());
+    std::string sa = p.string();
+    session_logger = std::make_unique<SessionLogger>(sa);
 
-    //controller_20 = std::make_unique<eviso15118::TbdController>(tbd_config_20, callbacks_20);
+    //Get the config items from the calling module
+    const auto default_cert_path = mod->info.paths.etc / "certs";
+
+    //RDB TODO cert path not in interface nor is password, enable ssl logging or negotiation strategy
+    //const auto cert_path = get_cert_path(default_cert_path, mod->config.certificate_path);
+
+    tbd_config_20 = {
+        {
+            eviso15118::config::CertificateBackend::EVEREST_LAYOUT,
+            default_cert_path.string(),
+            "123456",
+            true,
+            //mod->config.private_key_password,
+            //mod->config.enable_ssl_logging,
+        },
+        mod->config.device,
+        eviso15118::config::TlsNegotiationStrategy::ENFORCE_TLS,
+    };
+
+
+    // RDB First we do the ISO20. This constructor causes everything to become ready, but
+    // waiting for a first StartCharging message to come in.
+
+    controller_20 = std::make_unique<eviso15118::TbdController>(tbd_config_20, callbacks_20);
 }
 
 void ISO15118_evImpl::ready() {
-    //RDB start looping waiting for messages and commands to come in
-    // while (true) {
-    //     try {
-    //         controller_20->loop();
-    //     } catch (const std::exception& e) {
-    //         EVLOG_error << "D20 EV crashed: " << e.what();
-    //         //publish_dlink_error(nullptr);
-    //     }
-    // }
+    // start looping waiting for messages and control events to come in
+    while (true) {
+        try {
+            controller_20->loop();
+        } catch (const std::exception& e) {
+            EVLOG_error << "D20 EV crashed: " << e.what();
+            //publish_dlink_error(nullptr);
+        }
+    }
 }
 
 bool ISO15118_evImpl::handle_start_charging(std::string& PaymentOption, std::string& EnergyTransferMode) {
-    // Start sending wireless SDP messages and react to the response(s)
+    // We need to be already connected to a wireless network using ISO15118-8
+    // Similar to SLAC, the wireless connection could be done by the iso15118_WiFi module, and this module is informed 
+    // asynchronously by mqtt
+    // For now, assume we are connected.
+
+    // Start the charging process (including SDP, either wireless or normal)
+    // This will be handled in the first state of the state machine on startup (or restart)
+    eviso15118::d20::start_stop_charging ss = eviso15118::d20::start_stop_charging::START_CHARGING;
+    controller_20->send_control_event(eviso15118::d20::StartStopCharging{ss});
+
     return true;
 }
 
 void ISO15118_evImpl::handle_stop_charging() {
     // your code for cmd stop_charging goes here
+    eviso15118::d20::start_stop_charging ss = eviso15118::d20::start_stop_charging::STOP_CHARGING;
+    controller_20->send_control_event(eviso15118::d20::StartStopCharging{ss});
+    return;
 }
 
 void ISO15118_evImpl::handle_pause_charging() {
     // your code for cmd pause_charging goes here
+    eviso15118::d20::start_stop_charging ss = eviso15118::d20::start_stop_charging::PAUSE_CHARGING;
+    controller_20->send_control_event(eviso15118::d20::StartStopCharging{ss});
+    return;    
 }
 
 void ISO15118_evImpl::handle_set_fault() {
